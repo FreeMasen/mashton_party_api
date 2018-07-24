@@ -1,0 +1,7 @@
+[package]
+name = "mashton_party_api"
+version = "0.1.0"
+authors = ["Robert Masen <r@robertmasen.pizza>"]
+
+[dependencies]
+actix-web = "0.7.1"
