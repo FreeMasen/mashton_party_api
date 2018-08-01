@@ -1,3 +1,5 @@
 **/target
 **/*.rs.bk
 db_config.toml
+**/node_modules
+**/.DS_Store

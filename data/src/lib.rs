@@ -109,7 +109,7 @@ pub fn get_rsvps_for(token: &Uuid) -> Option<Vec<i32>> {
 
 pub fn get_user_for(invite_id: &Uuid) -> Option<User> {
     let c = get_conn()?;
-    match c.query("SELECT u.id, u.name, u.token
+    match c.query("SELECT u.id, u.name, u.token, u.email
                     FROM public.user AS u
                     JOIN public.invite AS i
                         on i.user_id = u.id
@@ -123,6 +123,7 @@ pub fn get_user_for(invite_id: &Uuid) -> Option<User> {
                 name: row.get(1),
                 token: row.get(2),
                 invited_to: get_user_invite_ids(id, &c)?,
+                email: row.get(3),
             })
         },
         Err(e) => {
@@ -169,6 +170,88 @@ pub fn update_rsvp(rsvp: &Rsvp) -> Option<Vec<Party>> {
     }
 }
 
+pub fn get_all_users() -> Option<Vec<User>> {
+    let c = get_conn()?;
+    match c.query("SELECT id, name, token, email
+                    FROM public.user", &[]) {
+        Ok(rows) => {
+            Some(rows.iter().filter_map(|u| {
+                let id = u.get(0);
+                let invited_to = get_user_invite_ids(id, &c)?;
+                Some(User {
+                    id,
+                    name: u.get(1),
+                    token: u.get(2),
+                    invited_to,
+                    email: u.get(3)
+                })
+            }).collect())
+        },
+        Err(e) => {
+            error!(target: "db_events", "Unable to get users\n{:?}", e);
+            None
+        }
+    }
+}
+
+pub fn add_party(party: Party) -> Option<()> {
+    let c = get_conn()?;
+    match c.execute("INSERT INTO party (name, date, snippet, description, image_path, rsvp_item)
+                    VALUES ($1, $2, $3, $4, $5, $6)",
+                    &[&party.name, &party.date, &party.snippet, &party.description, &party.image_path, &party.rsvp_item]) {
+        Ok(_) => {
+            if let Some(ref rsvps) = party.rsvp_list {
+                for rsvp in rsvps {
+                    add_rsvp(party.id, rsvp, &c)?;
+                }
+            }
+            Some(())
+        },
+        Err(e) => {
+            error!(target: "db_events", "Unable to add new party\n{:?}", e);
+            None
+        }
+    }
+}
+
+pub fn add_rsvp(party_id: i32, rsvp: &Rsvp, c: &Connection) -> Option<()> {
+    match c.execute("INSERT INTO invite (user_id, party_id)
+                    VALUES ($1, $1)", &[&rsvp.user_id, &party_id]) {
+        Ok(_) => (),
+        Err(e) => {
+            error!(target: "db_events", "Unable to add new invite for party {}\n{:?}", party_id, e);
+            return None;
+        }
+    }
+    match c.execute("INSERT INTO rsvp (name, bringing, message, party_id, user_id, attending)
+                    VALUES ($1, $2, $3, $4, $5, false)",
+                    &[&rsvp.name, &rsvp.bringing, &rsvp.message, &party_id, &rsvp.user_id]) {
+        Ok(_) => Some(()),
+        Err(e) => {
+            error!(target: "db_events", "Unable to add new Rsvp for party: {}\n{:?}", party_id, e);
+            None
+        }
+    }
+}
+
+pub fn update_party(p: Party) -> Option<()> {
+    let c = get_conn()?;
+    match c.execute("UPDATE party
+                    SET name = $1,
+                    date = $2,
+                    snippet = $3,
+                    description = $4,
+                    image_path = $5,
+                    rsvp_item = $6",
+                    &[&p.name, &p.date, &p.snippet, &p.description, &p.image_path, &p.rsvp_item]) {
+        Ok(_) => Some(()),
+        Err(e) => {
+            error!(target: "db_events", "Unable to update party {}\n{:?}", p.id, e);
+            None
+        }
+    }
+}
+
 fn get_conn() -> Option<Connection> {
     match Connection::connect(format!("postgres://{}:{}@localhost:5432/mashton.party", CONFIG.user, CONFIG.password).as_str(), TlsMode::None) {
         Ok(c) => Some(c),
@@ -178,12 +261,13 @@ fn get_conn() -> Option<Connection> {
         },
     }
 }
+
 #[derive(Deserialize)]
 struct DbConfig {
     pub user: String,
     pub password: String,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Party {
     pub id: i32,
@@ -197,7 +281,7 @@ pub struct Party {
     pub rsvp_list: Option<Vec<Rsvp>>,
     pub rsvp_item: Option<String>,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Place {
     pub id: i32,
@@ -208,7 +292,7 @@ pub struct Place {
     pub zip: Option<String>,
     pub description: Option<String>,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Rsvp {
     pub id: i32,
@@ -218,11 +302,12 @@ pub struct Rsvp {
     pub message: Option<String>,
     pub user_id: i32,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct User {
     pub id: i32,
     pub name: String,
     pub token: Uuid,
     pub invited_to: Vec<i32>,
+    pub email: String,
 }

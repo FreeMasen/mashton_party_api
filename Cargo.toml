@@ -13,5 +13,4 @@ data = { path = "./data" }
 [workspace]
 members = [
     "data",
-    "update"
 ]
