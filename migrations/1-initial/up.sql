@@ -145,7 +145,7 @@ CREATE OR REPLACE VIEW public.guest_invite AS
         LEFT JOIN invite i
         ON g.id = i.guest_id;
 
-ALTER TABLE public.user_invite
+ALTER TABLE public.guest_invite
     OWNER TO postgres;
 GRANT ALL on TABLE public.guest_invite TO miley;
 GRANT ALL on TABLE public.guest_invite TO postgres;
