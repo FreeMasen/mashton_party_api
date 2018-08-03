@@ -127,7 +127,8 @@ CREATE OR REPLACE VIEW public.rsvp AS
     i.bringing,
     i.message,
     i.party_id,
-    g.token
+    g.token,
+    g.id as guest_id
    FROM guest g
      LEFT JOIN invite i ON i.guest_id = g.id;
 
@@ -137,3 +138,14 @@ ALTER TABLE public.rsvp
 GRANT ALL ON TABLE public.rsvp TO miley;
 
 GRANT ALL ON TABLE public.rsvp TO postgres;
+
+CREATE OR REPLACE VIEW public.guest_invite AS
+    SELECT g.id, g.name, g.token, g.email, i.guid as invite_token
+    FROM guest g
+        LEFT JOIN invite i
+        ON g.id = i.guest_id;
+
+ALTER TABLE public.user_invite
+    OWNER TO postgres;
+GRANT ALL on TABLE public.guest_invite TO miley;
+GRANT ALL on TABLE public.guest_invite TO postgres;

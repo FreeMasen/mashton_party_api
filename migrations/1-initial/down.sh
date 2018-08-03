@@ -1,1 +1,1 @@
-psql -f ./down.sh "mashton.party"
+psql -f ./down.sql "mashton.party"

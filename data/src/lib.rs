@@ -70,10 +70,11 @@ fn place_for(id: i32, c: &Connection) -> Option<Place> {
 }
 
 fn rsvps_for(id: i32, c: &Connection) -> Option<Vec<Rsvp>> {
-    match c.query("SELECT id, name, attending, bringing, message, user_id
+    match c.query("SELECT id, name, attending, bringing, message, guest_id
                                     FROM public.rsvp
                                     where party_id = $1", &[&id]) {
         Ok(rows) => {
+            debug!(target: "db_events", "Got {} RSVPs for party with id {}", rows.len(), id);
             Some(rows.iter().map(|r| {
                 Rsvp {
                     id: r.get(0),
@@ -81,12 +82,12 @@ fn rsvps_for(id: i32, c: &Connection) -> Option<Vec<Rsvp>> {
                     attending: r.get(2),
                     bringing: r.get(3),
                     message: r.get(4),
-                    user_id: r.get(5),
+                    guest_id: r.get(5),
                 }
             }).collect())
         },
         Err(e) => {
-            error!("ERROR unable to get rsvps for party_id: {}\n{:?}", id, e);
+            error!(target: "db_events", "ERROR unable to get rsvps for party_id: {}\n{:?}", id, e);
             None
         }
     }
@@ -101,19 +102,18 @@ pub fn get_rsvps_for(token: &Uuid) -> Option<Vec<i32>> {
             Some(rows.iter().map(|r| r.get(0)).collect())
         },
         Err(e) => {
-            error!("ERROR unable to get rsvp ids for user {}\n{:?}", token, e);
+            error!("ERROR unable to get rsvp ids for guest {}\n{:?}", token, e);
             None
         }
     }
 }
 
 pub fn get_user_for(invite_id: &Uuid) -> Option<Guest> {
+    debug!(target: "db_events", "get_user_for {:?}", invite_id);
     let c = get_conn()?;
-    match c.query("SELECT u.id, u.name, u.token, u.email
-                    FROM public.guest AS u
-                    JOIN public.invite AS i
-                        on i.guest_id = u.id
-                    WHERE i.guid = $1
+    match c.query("SELECT id, name, token, email
+                    FROM user_invite
+                    WHERE invite_token = $1
                     LIMIT 1", &[&invite_id]) {
         Ok(rows) => {
             let row = rows.iter().next()?;
@@ -127,7 +127,7 @@ pub fn get_user_for(invite_id: &Uuid) -> Option<Guest> {
             })
         },
         Err(e) => {
-            error!(target: "db_events", "ERROR unable to get user for invite_id: {}\n{:?}", invite_id, e);
+            error!(target: "db_events", "ERROR unable to get guest for invite_id: {}\n{:?}", invite_id, e);
             None
         }
     }
@@ -137,15 +137,15 @@ fn get_user_invite_ids(user_id: i32, c: &Connection) -> Option<Vec<i32>> {
     debug!(target: "db_events", "get_user_invite_ids {}", user_id);
     match c.query("SELECT party_id
                     FROM invite
-                    WHERE user_id = $1", &[&user_id]) {
+                    WHERE guest_id = $1", &[&user_id]) {
         Ok(rows) => {
-            debug!(target: "db_events", "got rows");
+            debug!(target: "db_events", "found {} user invite id(s)", rows.len());
             let ret = rows.iter().map(|r| r.get(0)).collect();
-            debug!(target: "db_events", "ids: {:?}", ret);
+            debug!(target: "db_events", "invite ids: {:?}", ret);
             Some(ret)
         },
         Err(e) => {
-            error!(target: "db_events", "ERROR unable to get user invite ids for {}\n{:?}", user_id, e);
+            error!(target: "db_events", "ERROR unable to get guest invite ids for {}\n{:?}", user_id, e);
             None
         }
     }
@@ -173,7 +173,7 @@ pub fn update_rsvp(rsvp: &Rsvp) -> Option<Vec<Party>> {
 pub fn get_all_users() -> Option<Vec<Guest>> {
     let c = get_conn()?;
     match c.query("SELECT id, name, token, email
-                    FROM public.user", &[]) {
+                    FROM public.guest", &[]) {
         Ok(rows) => {
             Some(rows.iter().filter_map(|u| {
                 let id = u.get(0);
@@ -188,7 +188,7 @@ pub fn get_all_users() -> Option<Vec<Guest>> {
             }).collect())
         },
         Err(e) => {
-            error!(target: "db_events", "Unable to get users\n{:?}", e);
+            error!(target: "db_events", "Unable to get guests\n{:?}", e);
             None
         }
     }
@@ -301,4 +301,18 @@ pub struct Guest {
     pub token: Uuid,
     pub invited_to: Vec<i32>,
     pub email: String,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn db_test() {
+        if let Some(parties) = get_all_parties() {
+            for p in parties {
+
+            }
+        }
+    }
+
 }
