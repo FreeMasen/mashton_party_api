@@ -28,14 +28,14 @@ GRANT ALL ON TABLE public.party TO miley;
 GRANT ALL ON TABLE public.party TO postgres;
 -- Table: public."user"
 
--- DROP TABLE public."user";
+-- DROP TABLE public.guest;
 
-CREATE SEQUENCE public.user_id_sequence;
-ALTER SEQUENCE public.user_id_sequence OWNER to postgres;
+CREATE SEQUENCE public.guest_id_sequence;
+ALTER SEQUENCE public.guest_id_sequence OWNER to postgres;
 
-CREATE TABLE public."user"
+CREATE TABLE public.guest
 (
-    id integer NOT NULL DEFAULT nextval('user_id_sequence'::regclass),
+    id integer NOT NULL DEFAULT nextval('guest_id_sequence'::regclass),
     name character varying(1000) COLLATE pg_catalog."default" NOT NULL,
     token uuid NOT NULL DEFAULT uuid_generate_v1(),
     email character varying(500) COLLATE pg_catalog."default" NOT NULL,
@@ -46,29 +46,33 @@ WITH (
 )
 TABLESPACE pg_default;
 
-ALTER TABLE public."user"
+ALTER TABLE public.guest
     OWNER to postgres;
 
-GRANT ALL ON TABLE public."user" TO miley;
+GRANT ALL ON TABLE public.guest TO miley;
 
-GRANT ALL ON TABLE public."user" TO postgres;
+GRANT ALL ON TABLE public.guest TO postgres;
 
 CREATE SEQUENCE public.invite_id_sequence;
 ALTER SEQUENCE public.invite_id_sequence OWNER TO postgres;
 
 CREATE TABLE public.invite
 (
-    user_id integer NOT NULL,
+    guest_id integer NOT NULL,
     id integer NOT NULL DEFAULT nextval('invite_id_sequence'::regclass),
     guid uuid NOT NULL DEFAULT uuid_generate_v1(),
     party_id integer NOT NULL,
+    responded boolean NOT NULL DEFAULT false,
+    attending boolean NOT NULL DEFAULT false,
+    bringing character varying(2000),
+    message character varying(2000),
     CONSTRAINT invite_pkey PRIMARY KEY (id),
     CONSTRAINT invite_party_id_fkey FOREIGN KEY (party_id)
         REFERENCES public.party (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION,
-    CONSTRAINT invite_user_id_fkey FOREIGN KEY (user_id)
-        REFERENCES public."user" (id) MATCH SIMPLE
+    CONSTRAINT invite_guest_id_fkey FOREIGN KEY (guest_id)
+        REFERENCES public.guest (id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE NO ACTION
 )
@@ -113,55 +117,23 @@ ALTER TABLE public.place
 
 GRANT ALL ON TABLE public.place TO miley;
 
--- Table: public.rsvp
 
--- DROP TABLE public.rsvp;
-CREATE SEQUENCE public.rsvp_id_sequence;
-ALTER SEQUENCE public.rsvp_id_sequence OWNER TO postgres;
-CREATE TABLE public.rsvp
-(
-    id integer NOT NULL DEFAULT nextval('rsvp_id_sequence'::regclass),
-    name character varying(1000) COLLATE pg_catalog."default" NOT NULL,
-    bringing character varying(1000) COLLATE pg_catalog."default" DEFAULT 0,
-    message character varying(5000) COLLATE pg_catalog."default",
-    party_id integer,
-    user_id integer NOT NULL,
-    attending boolean NOT NULL DEFAULT false,
-    CONSTRAINT rsvp_pkey PRIMARY KEY (id),
-    CONSTRAINT rsvp_party_id_fkey FOREIGN KEY (party_id)
-        REFERENCES public.party (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE NO ACTION,
-    CONSTRAINT rsvp_user_id_fkey FOREIGN KEY (user_id)
-        REFERENCES public."user" (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE NO ACTION
-)
-WITH (
-    OIDS = FALSE
-)
-TABLESPACE pg_default;
+
+CREATE OR REPLACE VIEW public.rsvp AS
+ SELECT
+    i.id,
+    g.name,
+    i.attending,
+    i.bringing,
+    i.message,
+    i.party_id,
+    g.token
+   FROM guest g
+     LEFT JOIN invite i ON i.guest_id = g.id;
 
 ALTER TABLE public.rsvp
-    OWNER to postgres;
+    OWNER TO postgres;
 
 GRANT ALL ON TABLE public.rsvp TO miley;
 
 GRANT ALL ON TABLE public.rsvp TO postgres;
-
--- View: public.user_rsvps
-
--- DROP VIEW public.user_rsvps;
-
-CREATE OR REPLACE VIEW public.user_rsvps AS
- SELECT u.token,
-    r.id
-   FROM "user" u
-     LEFT JOIN rsvp r ON r.user_id = u.id;
-
-ALTER TABLE public.user_rsvps
-    OWNER TO postgres;
-
-GRANT ALL ON TABLE public.user_rsvps TO miley;
-
-GRANT ALL ON TABLE public.user_rsvps TO postgres;

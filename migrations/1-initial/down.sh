@@ -1,0 +1,1 @@
+psql -f ./down.sh "mashton.party"
