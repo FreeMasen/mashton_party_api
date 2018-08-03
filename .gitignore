@@ -3,3 +3,4 @@
 db_config.toml
 **/node_modules
 **/.DS_Store
+migrations/1-initial/seed.sql

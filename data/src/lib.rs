@@ -95,7 +95,7 @@ fn rsvps_for(id: i32, c: &Connection) -> Option<Vec<Rsvp>> {
 pub fn get_rsvps_for(token: &Uuid) -> Option<Vec<i32>> {
     let c = get_conn()?;
     match c.query("SELECT id
-                  FROM user_rsvps
+                  FROM rsvp
                   WHERE token = $1", &[&token]) {
         Ok(rows) => {
             Some(rows.iter().map(|r| r.get(0)).collect())
@@ -107,18 +107,18 @@ pub fn get_rsvps_for(token: &Uuid) -> Option<Vec<i32>> {
     }
 }
 
-pub fn get_user_for(invite_id: &Uuid) -> Option<User> {
+pub fn get_user_for(invite_id: &Uuid) -> Option<Guest> {
     let c = get_conn()?;
     match c.query("SELECT u.id, u.name, u.token, u.email
-                    FROM public.user AS u
+                    FROM public.guest AS u
                     JOIN public.invite AS i
-                        on i.user_id = u.id
+                        on i.guest_id = u.id
                     WHERE i.guid = $1
                     LIMIT 1", &[&invite_id]) {
         Ok(rows) => {
             let row = rows.iter().next()?;
             let id = row.get(0);
-            Some(User {
+            Some(Guest {
                 id,
                 name: row.get(1),
                 token: row.get(2),
@@ -153,13 +153,13 @@ fn get_user_invite_ids(user_id: i32, c: &Connection) -> Option<Vec<i32>> {
 
 pub fn update_rsvp(rsvp: &Rsvp) -> Option<Vec<Party>> {
     let c = get_conn()?;
-    match c.execute("UPDATE rsvp
-                    SET name = $1,
-                    bringing = $2,
-                    message = $3,
-                    attending = $4
-                    where id = $5",
-                    &[&rsvp.name, &rsvp.bringing,
+    match c.execute("UPDATE invite
+                    SET
+                    bringing = $1,
+                    message = $2,
+                    attending = $3
+                    where id = $4",
+                    &[&rsvp.bringing,
                     &rsvp.message, &rsvp.attending,
                     &rsvp.id]) {
         Ok(_) => get_all_parties(),
@@ -170,7 +170,7 @@ pub fn update_rsvp(rsvp: &Rsvp) -> Option<Vec<Party>> {
     }
 }
 
-pub fn get_all_users() -> Option<Vec<User>> {
+pub fn get_all_users() -> Option<Vec<Guest>> {
     let c = get_conn()?;
     match c.query("SELECT id, name, token, email
                     FROM public.user", &[]) {
@@ -178,7 +178,7 @@ pub fn get_all_users() -> Option<Vec<User>> {
             Some(rows.iter().filter_map(|u| {
                 let id = u.get(0);
                 let invited_to = get_user_invite_ids(id, &c)?;
-                Some(User {
+                Some(Guest {
                     id,
                     name: u.get(1),
                     token: u.get(2),
@@ -215,20 +215,11 @@ pub fn add_party(party: Party) -> Option<()> {
 }
 
 pub fn add_rsvp(party_id: i32, rsvp: &Rsvp, c: &Connection) -> Option<()> {
-    match c.execute("INSERT INTO invite (user_id, party_id)
-                    VALUES ($1, $1)", &[&rsvp.user_id, &party_id]) {
-        Ok(_) => (),
-        Err(e) => {
-            error!(target: "db_events", "Unable to add new invite for party {}\n{:?}", party_id, e);
-            return None;
-        }
-    }
-    match c.execute("INSERT INTO rsvp (name, bringing, message, party_id, user_id, attending)
-                    VALUES ($1, $2, $3, $4, $5, false)",
-                    &[&rsvp.name, &rsvp.bringing, &rsvp.message, &party_id, &rsvp.user_id]) {
+    match c.execute("INSERT INTO invite (guest_id, party_id, bringing, message)
+                    VALUES ($1, $2, $3, $4)", &[&rsvp.guest_id, &party_id, &rsvp.bringing, &rsvp.message]) {
         Ok(_) => Some(()),
         Err(e) => {
-            error!(target: "db_events", "Unable to add new Rsvp for party: {}\n{:?}", party_id, e);
+            error!(target: "db_events", "Unable to add new invite for party {}\n{:?}", party_id, e);
             None
         }
     }
@@ -300,11 +291,11 @@ pub struct Rsvp {
     pub attending: bool,
     pub bringing: Option<String>,
     pub message: Option<String>,
-    pub user_id: i32,
+    pub guest_id: i32,
 }
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct User {
+pub struct Guest {
     pub id: i32,
     pub name: String,
     pub token: Uuid,
