@@ -112,7 +112,7 @@ pub fn get_user_for(invite_id: &Uuid) -> Option<Guest> {
     debug!(target: "db_events", "get_user_for {:?}", invite_id);
     let c = get_conn()?;
     match c.query("SELECT id, name, token, email
-                    FROM user_invite
+                    FROM guest_invite
                     WHERE invite_token = $1
                     LIMIT 1", &[&invite_id]) {
         Ok(rows) => {
