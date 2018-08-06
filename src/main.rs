@@ -22,7 +22,6 @@ use uuid::Uuid;
 use data::Rsvp;
 
 fn main() {
-    std::env::set_var("RUST_LOG", "actix_web=info,db_events=debug");
     env_logger::init();
     server::new(|| App::new()
                 .middleware(Logger::default())
